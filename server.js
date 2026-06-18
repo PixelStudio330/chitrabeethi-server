@@ -23,6 +23,8 @@ mongoose.connect(process.env.MONGODB_URI)
   });
 
 // --- 3. HEALTH CHECK ROUTE ---
+// --- ROUTES INTERCEPTORS ---
+app.use('/api/auth', require('./routes/authRoutes'));
 app.get('/', (req, res) => {
   res.status(200).json({ 
     message: 'Chitrabeethi Vault Backend is Alive and Humming! 🚀',
