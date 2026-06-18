@@ -15,16 +15,21 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: function() { return !this.googleId; } // Only required for standard email logins
+    required: function() { return !this.googleId; } 
   },
   googleId: {
     type: String,
     default: null
   },
+  profilePicture: {
+    type: String,
+    // Professional default UI-Avatar
+    default: 'https://ui-avatars.com/api/?name=User&background=E2B4BD&color=3D2B1F'
+  },
   role: {
     type: String,
     enum: ['user', 'artist', 'admin'],
-    default: 'user' // Options are 'user' (Buyer) or 'artist'
+    default: 'user'
   },
   subscriptionTier: {
     type: String,
