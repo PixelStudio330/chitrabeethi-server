@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser } = require('../controllers/authController');
+const { registerUser, loginUser, googleLogin, updateProfile } = require('../controllers/authController');
 
-// Clean endpoints map straight to our controller functions
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/google', googleLogin);
+
+// 🌟 ADD THIS ROUTE: Matches exactly what frontend calls via api.put()
+router.put('/update-profile', updateProfile);
 
 module.exports = router;
