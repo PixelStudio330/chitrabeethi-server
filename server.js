@@ -7,7 +7,6 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- 1. MIDDLEWARE ---
-// CORS options: Allow requests from your local frontend development port
 app.use(cors({
   origin: ['http://localhost:3000'], // Add your Vercel URL here later during deployment
   credentials: true
@@ -19,12 +18,15 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('🍃 Vault Awake: MongoDB Atlas Connected Successfully for Chitrabeethi!'))
   .catch((err) => {
     console.error('❌ Database connection error:', err.message);
-    process.exit(1); // Stop the server if connection fails
+    process.exit(1); 
   });
 
-// --- 3. HEALTH CHECK ROUTE ---
-// --- ROUTES INTERCEPTORS ---
+// --- 3. ROUTES INTERCEPTORS ---
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/artworks', require('./routes/artworkRoutes')); // Handles /api/artworks AND /api/artworks/:id/comments
+app.use('/api/wishlist', require('./routes/wishlistRoutes'));
+
+// Health Check Route
 app.get('/', (req, res) => {
   res.status(200).json({ 
     message: 'Chitrabeethi Vault Backend is Alive and Humming! 🚀',

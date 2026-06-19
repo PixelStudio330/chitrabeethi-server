@@ -1,0 +1,8 @@
+const express = require("express");
+const router = express.Router();
+const { getUserWishlist, toggleWishlistItem } = require("../controllers/wishlistController");
+
+router.get("/", getUserWishlist);
+router.post("/toggle", toggleWishlistItem);
+
+module.exports = router;
