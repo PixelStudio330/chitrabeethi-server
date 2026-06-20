@@ -6,12 +6,18 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- 1. MIDDLEWARE ---
+// --- 1. GLOBAL MIDDLEWARE ---
 app.use(cors({
-  origin: ['http://localhost:3000'], // Add your Vercel URL here later during deployment
+  origin: ['http://localhost:3000'], 
   credentials: true
 }));
-app.use(express.json()); // Parses incoming JSON payloads
+
+// 💳 MOVED HERE: Mount the payment routes BEFORE express.json()
+// This allows payment routes to capture raw data chunks for Stripe signatures safely!
+app.use('/api/payments', require('./routes/paymentRoutes'));
+
+// Global parsers run for all OTHER routes below
+app.use(express.json()); 
 
 // --- 2. DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGODB_URI)
@@ -23,7 +29,7 @@ mongoose.connect(process.env.MONGODB_URI)
 
 // --- 3. ROUTES INTERCEPTORS ---
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/artworks', require('./routes/artworkRoutes')); // Handles /api/artworks AND /api/artworks/:id/comments
+app.use('/api/artworks', require('./routes/artworkRoutes')); 
 app.use('/api/wishlist', require('./routes/wishlistRoutes'));
 
 // Health Check Route
