@@ -5,9 +5,15 @@ const Artwork = require("../models/Artwork");
 // @access  Public
 exports.getAllArtworks = async (req, res) => {
   try {
-    const { search, category, minPrice, maxPrice, sort, page = 1, limit = 8 } = req.query;
+    // 1. ADD 'artist' TO THE DESTRUCTURED REQ.QUERY KEYS
+    const { search, category, minPrice, maxPrice, sort, page = 1, limit = 8, artist } = req.query;
     
     let query = { status: { $ne: "unpublished" } };
+
+    // 2. FILTER BY SPECIFIC ARTIST IF PROVIDED BY THE FRONTEND
+    if (artist) {
+      query.artist = artist;
+    }
 
     if (search) {
       query.$or = [
@@ -41,6 +47,7 @@ exports.getAllArtworks = async (req, res) => {
       .skip(skip)
       .limit(limitNum);
 
+    // Keep response consistent with your frontend expectations
     return res.status(200).json({
       success: true,
       count: artworks.length,
@@ -50,6 +57,8 @@ exports.getAllArtworks = async (req, res) => {
         currentPage: pageNum,
         limit: limitNum
       },
+      // Ensure it sends either data wrap or direct array safely 
+      artworks: artworks, 
       data: artworks,
     });
   } catch (error) {
