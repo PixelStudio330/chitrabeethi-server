@@ -1,16 +1,18 @@
 const Comment = require('../models/Comment');
 const mongoose = require('mongoose');
 
-// Helper to check if a purchase record exists
+// Helper to check if a purchase record exists in transaction collections
 const checkPurchaseStatus = async (userId, artworkId) => {
+  if (!userId || !artworkId) return false;
   try {
-    // Note: Make sure 'Transaction' matches your actual Mongoose Model name for artwork purchases
+    // Looks up a verified, matching finalized transaction record inside your MongoDB
     const transaction = await mongoose.model('Transaction').findOne({
       buyerId: userId, 
       artworkId: artworkId
     });
     return !!transaction;
   } catch (error) {
+    console.error("Transaction confirmation engine error:", error);
     return false;
   }
 };
@@ -20,16 +22,12 @@ const checkPurchaseStatus = async (userId, artworkId) => {
 exports.getArtworkComments = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.query.userId; // Passed as an optional query param from frontend
+    const userId = req.query.userId; 
 
     const comments = await Comment.find({ artworkId: id }).sort({ createdAt: -1 });
     
-    // --- FUTURE REQUIRED ASSIGNMENT METRIC ---
-    // TODO: Uncomment the line below once Stripe payments are saving transaction documents to the DB
-    // const hasPurchased = userId ? await checkPurchaseStatus(userId, id) : false;
-    
-    // TEMPORARY: Bypassing the check so all logged-in users can write and interact right now
-    const hasPurchased = true;
+    // Unlocked Verification pipeline
+    const hasPurchased = userId ? await checkPurchaseStatus(userId, id) : false;
 
     res.status(200).json({
       comments,
@@ -51,16 +49,13 @@ exports.addComment = async (req, res) => {
       return res.status(400).json({ message: "Comment content cannot be empty" });
     }
 
-    // --- FUTURE REQUIRED ASSIGNMENT METRIC ---
-    // TODO: Uncomment this validation block once payments/transactions are implemented to secure the backend path.
-    /*
+    // Activated Backend Route Guard: Prevents unauthorized POST API calls via Postman or terminal scripts
     const hasPurchased = await checkPurchaseStatus(userId, id);
     if (!hasPurchased) {
       return res.status(403).json({ 
         message: "Access Denied: Only collectors who have purchased this artwork can leave a review." 
       });
     }
-    */
 
     const newComment = new Comment({ artworkId: id, userId, userName, comment });
     const savedComment = await newComment.save();
@@ -80,7 +75,6 @@ exports.updateComment = async (req, res) => {
     const existingComment = await Comment.findById(commentId);
     if (!existingComment) return res.status(404).json({ message: "Comment not found" });
 
-    // Validate ownership
     if (existingComment.userId.toString() !== userId) {
       return res.status(403).json({ message: "Unauthorized to edit this comment" });
     }
@@ -98,7 +92,7 @@ exports.updateComment = async (req, res) => {
 exports.deleteComment = async (req, res) => {
   try {
     const { commentId } = req.params;
-    const { userId } = req.body; // Pass userId in request body to verify ownership
+    const { userId } = req.body; 
 
     const existingComment = await Comment.findById(commentId);
     if (!existingComment) return res.status(404).json({ message: "Comment not found" });
