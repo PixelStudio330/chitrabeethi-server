@@ -107,3 +107,27 @@ exports.deleteComment = async (req, res) => {
     res.status(500).json({ message: 'Failed to delete comment', error: err.message });
   }
 };
+
+// @desc    Get all comments written by a specific user across all artworks
+// @route   GET /api/artworks/comments/user/:userId
+exports.getUserComments = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "User ID parameter is required" });
+    }
+
+    const comments = await Comment.find({ userId })
+      .populate('artworkId', 'name img price') // Pull references to show artwork card details
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: comments.length,
+      data: comments
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to retrieve user comments', error: err.message });
+  }
+};

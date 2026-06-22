@@ -33,6 +33,7 @@ mongoose.connect(process.env.MONGODB_URI)
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/artworks', require('./routes/artworkRoutes')); 
 app.use('/api/wishlist', require('./routes/wishlistRoutes'));
+app.use('/api/comments', require('./routes/commentRoutes'));
 
 // Health Check Route
 app.get('/', (req, res) => {
