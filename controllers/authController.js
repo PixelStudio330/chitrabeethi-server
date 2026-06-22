@@ -46,7 +46,8 @@ exports.registerUser = async (req, res) => {
         name: newUser.name, 
         email: newUser.email, 
         role: newUser.role,
-        profilePicture: newUser.profilePicture 
+        profilePicture: newUser.profilePicture,
+        photoUrl: newUser.profilePicture // 🌟 Synced payload key for frontend
       }
     });
   } catch (error) {
@@ -90,7 +91,8 @@ exports.loginUser = async (req, res) => {
         name: user.name, 
         email: user.email, 
         role: user.role,
-        profilePicture: user.profilePicture 
+        profilePicture: user.profilePicture,
+        photoUrl: user.profilePicture // 🌟 Synced payload key for frontend
       }
     });
   } catch (error) {
@@ -142,7 +144,8 @@ exports.googleLogin = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profilePicture: user.profilePicture
+        profilePicture: user.profilePicture,
+        photoUrl: user.profilePicture // 🌟 Synced payload key for frontend
       }
     });
 
@@ -151,7 +154,6 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
-// 🌟 UPDATED PROFILE UPDATE CONTROLLER METHOD
 exports.updateProfile = async (req, res) => {
   try {
     const { userId, name, photoUrl } = req.body;
@@ -160,15 +162,13 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ message: "User identity verification context missing." });
     }
 
-    // Maps custom frontend property layouts directly into schema standards
-    // 🌟 FIXED: Replaced deprecated { new: true } with { returnDocument: 'after' }
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { 
         name: name, 
         profilePicture: photoUrl 
       },
-      { returnDocument: 'after', runValidators: true }
+      { new: true, runValidators: true } // 🌟 FIX: 'new: true' is the correct Mongoose syntax to return the updated avatar instantly
     );
 
     if (!updatedUser) {
@@ -183,11 +183,45 @@ exports.updateProfile = async (req, res) => {
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
-        photoUrl: updatedUser.profilePicture // Sends back photoUrl so state remains synced
+        profilePicture: updatedUser.profilePicture,
+        photoUrl: updatedUser.profilePicture 
       }
     });
 
   } catch (error) {
     res.status(500).json({ message: "Canvas synchronization failed.", error: error.message });
+  }
+};
+
+exports.getUserProfile = async (req, res) => {
+  try {
+    const mongoose = require("mongoose");
+
+const { id } = req.params;
+
+if (!mongoose.Types.ObjectId.isValid(id)) {
+  return res.status(400).json({
+    message: "Invalid user ID."
+  });
+}
+
+const user = await User.findById(id);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    res.status(200).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        profilePicture: user.profilePicture,
+        photoUrl: user.profilePicture // 🌟 Synced for the frontend!
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching user data.", error: error.message });
   }
 };

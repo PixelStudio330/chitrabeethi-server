@@ -41,11 +41,13 @@ exports.getAllArtworks = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const totalItems = await Artwork.countDocuments(query);
-    const artworks = await Artwork.find(query)
-      .populate("artist", "name email img")
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(limitNum);
+    const artworks = await Artwork.find(query).populate(
+    "artist",
+    "name email profilePicture role"
+  )
+  .sort(sortOptions)
+  .skip(skip)
+  .limit(limitNum);
 
     // Keep response consistent with your frontend expectations
     return res.status(200).json({
@@ -71,7 +73,10 @@ exports.getAllArtworks = async (req, res) => {
 // @access  Public
 exports.getArtworkById = async (req, res) => {
   try {
-    const artwork = await Artwork.findById(req.params.id).populate("artist", "name email img");
+    const artwork = await Artwork.findById(req.params.id).populate(
+    "artist",
+    "name email profilePicture role"
+  );
     if (!artwork) {
       return res.status(404).json({ success: false, message: "Artwork item not found in repository." });
     }

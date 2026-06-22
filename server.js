@@ -12,12 +12,14 @@ app.use(cors({
   credentials: true
 }));
 
-// 💳 MOVED HERE: Mount the payment routes BEFORE express.json()
-// This allows payment routes to capture raw data chunks for Stripe signatures safely!
+// Add this so query parameters and url encoding parse seamlessly everywhere
+app.use(express.urlencoded({ extended: true }));
+
+// 💳 Mounted payment routes BEFORE express.json() for Stripe signatures
 app.use('/api/payments', require('./routes/paymentRoutes'));
 
 // Global parsers run for all OTHER routes below
-app.use(express.json()); 
+app.use(express.json());
 
 // --- 2. DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGODB_URI)
@@ -37,6 +39,15 @@ app.get('/', (req, res) => {
   res.status(200).json({ 
     message: 'Chitrabeethi Vault Backend is Alive and Humming! 🚀',
     status: 'healthy'
+  });
+});
+
+// ✨ GLOBAL 404 JSON INTERCEPTOR FALLBACK
+// This catches any invalid routes and ensures JSON is returned, preventing frontend parser crashes.
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Endpoint Not Found - [${req.method}] ${req.originalUrl}. Check backend route configurations!`
   });
 });
 
