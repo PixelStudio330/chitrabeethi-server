@@ -46,8 +46,9 @@ exports.registerUser = async (req, res) => {
         name: newUser.name, 
         email: newUser.email, 
         role: newUser.role,
+        subscriptionTier: newUser.subscriptionTier || 'free', // 🌟 FIXED
         profilePicture: newUser.profilePicture,
-        photoUrl: newUser.profilePicture // 🌟 Synced payload key for frontend
+        photoUrl: newUser.profilePicture 
       }
     });
   } catch (error) {
@@ -91,8 +92,9 @@ exports.loginUser = async (req, res) => {
         name: user.name, 
         email: user.email, 
         role: user.role,
+        subscriptionTier: user.subscriptionTier || 'free', // 🌟 FIXED
         profilePicture: user.profilePicture,
-        photoUrl: user.profilePicture // 🌟 Synced payload key for frontend
+        photoUrl: user.profilePicture 
       }
     });
   } catch (error) {
@@ -144,8 +146,9 @@ exports.googleLogin = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        subscriptionTier: user.subscriptionTier || 'free', // 🌟 FIXED
         profilePicture: user.profilePicture,
-        photoUrl: user.profilePicture // 🌟 Synced payload key for frontend
+        photoUrl: user.profilePicture 
       }
     });
 
@@ -162,13 +165,11 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ message: "User identity verification context missing." });
     }
 
-    // Build the dynamic update payload object
     const updateData = { 
       name: name, 
       profilePicture: photoUrl 
     };
 
-    // 🌟 ADDED: If a password parameter is passed, validate and hash it securely
     if (password && password.trim() !== "") {
       if (password.length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters long." });
@@ -177,7 +178,6 @@ exports.updateProfile = async (req, res) => {
         return res.status(400).json({ message: "Include both uppercase & lowercase text." });
       }
       
-      const bcrypt = require('bcryptjs');
       const salt = await bcrypt.genSalt(10);
       updateData.password = await bcrypt.hash(password, salt);
     }
@@ -200,6 +200,7 @@ exports.updateProfile = async (req, res) => {
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
+        subscriptionTier: updatedUser.subscriptionTier || 'free', // 🌟 FIXED
         profilePicture: updatedUser.profilePicture,
         photoUrl: updatedUser.profilePicture 
       }
@@ -213,16 +214,13 @@ exports.updateProfile = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
   try {
     const mongoose = require("mongoose");
+    const { id } = req.params;
 
-const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid user ID." });
+    }
 
-if (!mongoose.Types.ObjectId.isValid(id)) {
-  return res.status(400).json({
-    message: "Invalid user ID."
-  });
-}
-
-const user = await User.findById(id);
+    const user = await User.findById(id);
     
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -234,8 +232,9 @@ const user = await User.findById(id);
         name: user.name,
         email: user.email,
         role: user.role,
+        subscriptionTier: user.subscriptionTier || 'free', // 🌟 FIXED
         profilePicture: user.profilePicture,
-        photoUrl: user.profilePicture // 🌟 Synced for the frontend!
+        photoUrl: user.profilePicture 
       }
     });
   } catch (error) {
