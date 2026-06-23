@@ -3,14 +3,11 @@ const Artwork = require('../models/Artwork');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 
-// ✨ Import the nodemailer helper modules and aesthetic HTML generators
-const { sendDummyEmail } = require('../utils/mailer');
-const { getPurchaseTemplate, getSubscriptionTemplate } = require('../utils/emailTemplates');
-
 const BDT_TO_USD_RATE = 127.3314;
 
 exports.createArtworkCheckout = async (req, res) => {
   try {
+    // ✨ Extract successUrl and cancelUrl dynamically passed from frontend context
     const { artworkId, userId, successUrl, cancelUrl } = req.body;
 
     const artwork = await Artwork.findById(artworkId);
@@ -31,6 +28,7 @@ exports.createArtworkCheckout = async (req, res) => {
 
     const priceInUsdCents = Math.round((artwork.price / BDT_TO_USD_RATE) * 100);
 
+    // Dynamic fallback generation using your new route structure
     const fallbackBase = process.env.CLIENT_URL || 'http://localhost:3000';
     const finalSuccessUrl = successUrl || `${fallbackBase}/product-details/${artworkId}?session_id={CHECKOUT_SESSION_ID}`;
     const finalCancelUrl = cancelUrl || `${fallbackBase}/product-details/${artworkId}`;
@@ -38,8 +36,8 @@ exports.createArtworkCheckout = async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
-      success_url: finalSuccessUrl,
-      cancel_url: finalCancelUrl, 
+      success_url: finalSuccessUrl, // ✨ Set to dynamically use the passed artwork URL
+      cancel_url: finalCancelUrl,   // ✨ Set to dynamically return to artwork details page
       customer_email: user.email,
       line_items: [
         {
@@ -59,8 +57,6 @@ exports.createArtworkCheckout = async (req, res) => {
         type: 'purchase',
         artworkId: artworkId,
         userId: userId,
-        artworkTitle: artwork.name, // ✨ Passed to avoid repetitive DB hits in mailing loops
-        buyerName: user.name,       // ✨ Passed to populate dynamic email literals
         originalBdtPrice: artwork.price.toString()
       }
     });
@@ -109,7 +105,6 @@ exports.createSubscriptionCheckout = async (req, res) => {
         type: 'subscription',
         targetTier: targetTier,
         userId: userId,
-        buyerName: user.name, // ✨ Passed for mail formatting
         originalBdtPrice: calculatedBdtPrice.toString()
       }
     });
@@ -133,38 +128,29 @@ exports.verifyPayment = async (req, res) => {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     if (session.payment_status === 'paid') {
-      const { type, artworkId, userId, originalBdtPrice, targetTier, artworkTitle, buyerName } = session.metadata;
+      const { type, artworkId, userId, originalBdtPrice, targetTier } = session.metadata;
       const finalBdtAmount = originalBdtPrice ? Number(originalBdtPrice) : Math.round((session.amount_total / 100) * BDT_TO_USD_RATE);
-      const recipientEmail = session.customer_details?.email || session.customer_email;
 
       existingTx = new Transaction({
         transactionId: session.id,
         type: type,
         buyerId: userId,
         artworkId: type === 'purchase' ? artworkId : undefined,
-        subscriptionTier: type === 'subscription' ? targetTier : undefined,
+        subscriptionTier: type === 'subscription' ? targetTier : undefined, // ✨ Map model schema completely
         amount: finalBdtAmount,
-        buyerEmail: recipientEmail,
+        buyerEmail: session.customer_details?.email || session.customer_email,
         status: 'successful'
       });
       await existingTx.save();
 
-      // ✨ Trigger Automated Email Asynchronously inside fulfillment blocks
       if (type === 'purchase') {
         await Artwork.findByIdAndUpdate(artworkId, { status: 'sold' });
         await User.findByIdAndUpdate(userId, { $inc: { purchasesCount: 1 } });
-        
-        const subject = `🎨 Invoice Verified: Order for "${artworkTitle || 'Masterpiece'}" Completed!`;
-        const htmlContent = getPurchaseTemplate(buyerName || "Collector", artworkTitle || "Masterpiece", finalBdtAmount);
-        sendDummyEmail(recipientEmail, subject, htmlContent);
       }
 
       if (type === 'subscription') {
         await User.findByIdAndUpdate(userId, { subscriptionTier: targetTier });
-        
-        const subject = `✨ Tier Upgraded: Welcome to ArtHub ${targetTier.toUpperCase()}!`;
-        const htmlContent = getSubscriptionTemplate(buyerName || "Enthusiast", targetTier);
-        sendDummyEmail(recipientEmail, subject, htmlContent);
+        console.log(`✨ Subscription Tier Sync Complete: Upgraded User ${userId} to [${targetTier.toUpperCase()}].`);
       }
 
       return res.status(201).json({ message: "Payment verified successfully", transaction: existingTx });
@@ -188,8 +174,7 @@ exports.handleStripeWebhook = async (req, res) => {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    const { type, artworkId, userId, originalBdtPrice, targetTier, artworkTitle, buyerName } = session.metadata;
-    const recipientEmail = session.customer_details?.email || session.customer_email;
+    const { type, artworkId, userId, originalBdtPrice, targetTier } = session.metadata;
 
     try {
       const finalBdtAmount = originalBdtPrice ? Number(originalBdtPrice) : Math.round((session.amount_total / 100) * BDT_TO_USD_RATE);
@@ -203,29 +188,20 @@ exports.handleStripeWebhook = async (req, res) => {
           type: type,
           buyerId: userId,
           artworkId: type === 'purchase' ? artworkId : undefined,
-          subscriptionTier: type === 'subscription' ? targetTier : undefined,
+          subscriptionTier: type === 'subscription' ? targetTier : undefined, // ✨ Align with database layout entries
           amount: finalBdtAmount,
-          buyerEmail: recipientEmail,
+          buyerEmail: session.customer_details?.email,
           status: 'successful'
         });
         await transaction.save();
 
-        // ✨ Trigger Webhook-level Nodemailer fallback delivery thread
         if (type === 'purchase') {
           await Artwork.findByIdAndUpdate(artworkId, { status: 'sold' });
           await User.findByIdAndUpdate(userId, { $inc: { purchasesCount: 1 } });
-          
-          const subject = `🎨 Invoice Verified: Order for "${artworkTitle || 'Masterpiece'}" Completed!`;
-          const htmlContent = getPurchaseTemplate(buyerName || "Collector", artworkTitle || "Masterpiece", finalBdtAmount);
-          sendDummyEmail(recipientEmail, subject, htmlContent);
         }
 
         if (type === 'subscription') {
           await User.findByIdAndUpdate(userId, { subscriptionTier: targetTier });
-          
-          const subject = `✨ Tier Upgraded: Welcome to ArtHub ${targetTier.toUpperCase()}!`;
-          const htmlContent = getSubscriptionTemplate(buyerName || "Enthusiast", targetTier);
-          sendDummyEmail(recipientEmail, subject, htmlContent);
         }
       }
     } catch (dbErr) {
