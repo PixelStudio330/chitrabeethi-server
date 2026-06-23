@@ -5,7 +5,6 @@ const Transaction = require('../models/Transaction');
 
 const BDT_TO_USD_RATE = 127.3314;
 
-// 1. CREATE CHECKOUT SESSION FOR ARTWORK PURCHASES
 exports.createArtworkCheckout = async (req, res) => {
   try {
     const { artworkId, userId } = req.body;
@@ -62,7 +61,6 @@ exports.createArtworkCheckout = async (req, res) => {
   }
 };
 
-// 2. CREATE CHECKOUT SESSION FOR SUBSCRIPTION UPGRADES
 exports.createSubscriptionCheckout = async (req, res) => {
   try {
     const { userId, tier: targetTier } = req.body; 
@@ -111,7 +109,6 @@ exports.createSubscriptionCheckout = async (req, res) => {
   }
 };
 
-// 3. VERIFY PAYMENT (HANDLES BOTH ARTWORKS AND SUBSCRIPTIONS)
 exports.verifyPayment = async (req, res) => {
   try {
     const { sessionId } = req.body;
@@ -158,7 +155,6 @@ exports.verifyPayment = async (req, res) => {
   }
 };
 
-// 4. STRIPE WEBHOOK FALLBACK
 exports.handleStripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -223,5 +219,58 @@ exports.getMyTransactions = async (req, res) => {
     return res.status(200).json({ success: true, data: transactions });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Failed to fetch user transaction logs", error: error.message });
+  }
+};
+
+// 🌟 NEW ADMIN METHOD: Get every single transaction on the system
+exports.getAllTransactions = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({})
+      .populate('buyerId', 'name email')
+      .populate({
+        path: 'artworkId',
+        select: 'name price category',
+        populate: { path: 'artist', select: 'name email' }
+      })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: transactions.length,
+      data: transactions
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to gather global transactions.", error: error.message });
+  }
+};
+
+// 🌟 NEW ADMIN METHOD: Calculate total system revenue, sold counts, and charts grouping data
+exports.getAdminAnalytics = async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments({});
+    const totalArtists = await User.countDocuments({ role: 'artist' });
+    
+    const successfulSales = await Transaction.find({ status: 'successful' });
+    const totalRevenue = successfulSales.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalArtworksSold = successfulSales.filter(tx => tx.type === 'purchase').length;
+
+    const artworks = await Artwork.find({});
+    const categoryDistribution = {};
+    artworks.forEach(art => {
+      categoryDistribution[art.category] = (categoryDistribution[art.category] || 0) + 1;
+    });
+
+    res.status(200).json({
+      success: true,
+      metrics: {
+        totalUsers,
+        totalArtists,
+        totalArtworksSold,
+        totalRevenue
+      },
+      categoryDistribution
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Analytics stream aggregation failure.", error: error.message });
   }
 };

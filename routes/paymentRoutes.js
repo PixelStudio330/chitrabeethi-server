@@ -2,17 +2,23 @@ const express = require('express');
 const router = express.Router();
 const { 
   createArtworkCheckout, 
-  createSubscriptionCheckout, // Import the new subscription generator
+  createSubscriptionCheckout, 
   verifyPayment, 
   handleStripeWebhook,
-  getMyTransactions
+  getMyTransactions,
+  getAllTransactions, // 🌟 Added
+  getAdminAnalytics   // 🌟 Added
 } = require('../controllers/paymentController');
 
 // Standard JSON Endpoints
 router.post('/create-artwork-checkout', express.json(), createArtworkCheckout);
-router.post('/create-subscription-checkout', express.json(), createSubscriptionCheckout); // New Route Attached
+router.post('/create-subscription-checkout', express.json(), createSubscriptionCheckout); 
 router.post('/verify-payment', express.json(), verifyPayment); 
 router.get('/my-transactions', getMyTransactions);
+
+// 🌟 Admin Dash Ledger & Graphs Tracking Endpoints
+router.get('/all-transactions', getAllTransactions);
+router.get('/admin-analytics', getAdminAnalytics);
 
 // Webhook Raw Stream Endpoint
 router.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);

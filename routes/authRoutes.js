@@ -1,14 +1,27 @@
 const express = require('express');
 const router = express.Router();
-// 🌟 Added getUserProfile to the imports below:
-const { registerUser, loginUser, googleLogin, updateProfile, getUserProfile } = require('../controllers/authController');
+
+const { 
+  registerUser, 
+  loginUser, 
+  googleLogin, 
+  updateProfile, 
+  getUserProfile,
+  getAllArtists,
+  getAllUsers,      // 🌟 Added
+  updateUserRole    // 🌟 Added
+} = require('../controllers/authController');
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.post('/google', googleLogin);
 router.put('/update-profile', updateProfile);
 
-// 🌟 ADD THIS ROUTE: This answers the frontend when it asks for the fresh user data
 router.get('/user/:id', getUserProfile);
+router.get('/artists', getAllArtists);
+
+// 🌟 Admin Dashboard Matrix Operations
+router.get('/users', getAllUsers);
+router.put('/update-role', updateUserRole);
 
 module.exports = router;

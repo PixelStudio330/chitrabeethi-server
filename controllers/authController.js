@@ -46,7 +46,7 @@ exports.registerUser = async (req, res) => {
         name: newUser.name, 
         email: newUser.email, 
         role: newUser.role,
-        subscriptionTier: newUser.subscriptionTier || 'free', // 🌟 FIXED
+        subscriptionTier: newUser.subscriptionTier || 'free',
         profilePicture: newUser.profilePicture,
         photoUrl: newUser.profilePicture 
       }
@@ -92,7 +92,7 @@ exports.loginUser = async (req, res) => {
         name: user.name, 
         email: user.email, 
         role: user.role,
-        subscriptionTier: user.subscriptionTier || 'free', // 🌟 FIXED
+        subscriptionTier: user.subscriptionTier || 'free',
         profilePicture: user.profilePicture,
         photoUrl: user.profilePicture 
       }
@@ -146,7 +146,7 @@ exports.googleLogin = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        subscriptionTier: user.subscriptionTier || 'free', // 🌟 FIXED
+        subscriptionTier: user.subscriptionTier || 'free',
         profilePicture: user.profilePicture,
         photoUrl: user.profilePicture 
       }
@@ -200,7 +200,7 @@ exports.updateProfile = async (req, res) => {
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
-        subscriptionTier: updatedUser.subscriptionTier || 'free', // 🌟 FIXED
+        subscriptionTier: updatedUser.subscriptionTier || 'free',
         profilePicture: updatedUser.profilePicture,
         photoUrl: updatedUser.profilePicture 
       }
@@ -227,17 +227,77 @@ exports.getUserProfile = async (req, res) => {
     }
 
     res.status(200).json({
+      success: true,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        subscriptionTier: user.subscriptionTier || 'free', // 🌟 FIXED
+        subscriptionTier: user.subscriptionTier || 'free',
         profilePicture: user.profilePicture,
         photoUrl: user.profilePicture 
       }
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching user data.", error: error.message });
+  }
+};
+
+exports.getAllArtists = async (req, res) => {
+  try {
+    const artists = await User.find({ role: 'artist' })
+      .select('-password') 
+      .limit(parseInt(req.query.limit) || 12);
+
+    res.status(200).json({
+      success: true,
+      count: artists.length,
+      data: artists
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching artist profiles.", error: error.message });
+  }
+};
+
+// 🌟 NEW ADMIN METHOD: Get all registered users across the platform
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({}).select('-password').sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error retrieving users matrix.", error: error.message });
+  }
+};
+
+// 🌟 NEW ADMIN METHOD: Change a user's role (e.g., user -> artist, user -> admin)
+exports.updateUserRole = async (req, res) => {
+  try {
+    const { targetUserId, newRole } = req.body;
+    
+    if (!['user', 'artist', 'admin'].includes(newRole)) {
+      return res.status(400).json({ success: false, message: "Invalid scope assignment role." });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      targetUserId,
+      { role: newRole },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "Target user profile not found." });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `User role synchronized to ${newRole.toUpperCase()} successfully.`,
+      data: updatedUser
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Role synchronization failed.", error: error.message });
   }
 };
