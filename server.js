@@ -7,8 +7,14 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- 1. GLOBAL MIDDLEWARE ---
+// Dynamically allow both local development and your deployed frontend URL
+const allowedOrigins = [
+  'http://localhost:3000',
+  process.env.FRONTEND_URL // ✨ Your live Vercel URL goes here in production
+].filter(Boolean); // This removes undefined lines if FRONTEND_URL isn't set locally
+
 app.use(cors({
-  origin: ['http://localhost:3000'], 
+  origin: allowedOrigins,
   credentials: true
 }));
 
