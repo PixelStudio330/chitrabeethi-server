@@ -156,19 +156,36 @@ exports.googleLogin = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { userId, name, photoUrl } = req.body;
+    const { userId, name, photoUrl, password } = req.body;
 
     if (!userId) {
       return res.status(400).json({ message: "User identity verification context missing." });
     }
 
+    // Build the dynamic update payload object
+    const updateData = { 
+      name: name, 
+      profilePicture: photoUrl 
+    };
+
+    // 🌟 ADDED: If a password parameter is passed, validate and hash it securely
+    if (password && password.trim() !== "") {
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long." });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password)) {
+        return res.status(400).json({ message: "Include both uppercase & lowercase text." });
+      }
+      
+      const bcrypt = require('bcryptjs');
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password, salt);
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { 
-        name: name, 
-        profilePicture: photoUrl 
-      },
-      { new: true, runValidators: true } // 🌟 FIX: 'new: true' is the correct Mongoose syntax to return the updated avatar instantly
+      updateData,
+      { new: true, runValidators: true }
     );
 
     if (!updatedUser) {

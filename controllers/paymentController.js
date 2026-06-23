@@ -5,6 +5,7 @@ const Transaction = require('../models/Transaction');
 
 const BDT_TO_USD_RATE = 127.3314;
 
+// 1. CREATE CHECKOUT SESSION FOR ARTWORK PURCHASES
 exports.createArtworkCheckout = async (req, res) => {
   try {
     const { artworkId, userId } = req.body;
@@ -16,7 +17,7 @@ exports.createArtworkCheckout = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
     if (artwork.status === 'sold') return res.status(400).json({ message: "This masterpiece is already sold out" });
 
-    const purchaseCount = await Transaction.countDocuments({ buyerId: userId, type: 'purchase' });
+    const purchaseCount = await Transaction.countDocuments({ buyerId: userId, type: 'purchase', status: 'successful' });
     
     if (user.subscriptionTier === 'free' && purchaseCount >= 3) {
       return res.status(403).json({ message: "Free Tier limit reached (Max 3). Please upgrade to Pro or Premium!" });
@@ -27,7 +28,6 @@ exports.createArtworkCheckout = async (req, res) => {
 
     const priceInUsdCents = Math.round((artwork.price / BDT_TO_USD_RATE) * 100);
 
-    // We change the success URL target redirect line back directly onto your specific detail dynamic path context block!
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -62,12 +62,61 @@ exports.createArtworkCheckout = async (req, res) => {
   }
 };
 
+// 2. CREATE CHECKOUT SESSION FOR SUBSCRIPTION UPGRADES
+exports.createSubscriptionCheckout = async (req, res) => {
+  try {
+    const { userId, tier: targetTier } = req.body; 
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    let priceInUsd = 0;
+    if (targetTier === 'pro') priceInUsd = 9.99;
+    else if (targetTier === 'premium') priceInUsd = 19.99;
+    else return res.status(400).json({ message: "Invalid target tier chosen." });
+
+    const priceInCents = Math.round(priceInUsd * 100);
+    const calculatedBdtPrice = Math.round(priceInUsd * BDT_TO_USD_RATE);
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      success_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard/user?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard/user`,
+      customer_email: user.email,
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `ArtHub ${targetTier.toUpperCase()} Subscription Plan`,
+              description: `Upgrade your marketplace account limit to ${targetTier === 'pro' ? '9 paintings' : 'unlimited paintings'}.`,
+            },
+            unit_amount: priceInCents,
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        type: 'subscription',
+        targetTier: targetTier,
+        userId: userId,
+        originalBdtPrice: calculatedBdtPrice.toString()
+      }
+    });
+
+    res.status(200).json({ id: session.id, url: session.url });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to generate subscription session", error: error.message });
+  }
+};
+
+// 3. VERIFY PAYMENT (HANDLES BOTH ARTWORKS AND SUBSCRIPTIONS)
 exports.verifyPayment = async (req, res) => {
   try {
     const { sessionId } = req.body;
-    if (!sessionId) return res.status(400).json({ message: "Session token index target parameter missing." });
+    if (!sessionId) return res.status(400).json({ message: "Session token parameter missing." });
 
-    // Check if transaction was already logged previously
     let existingTx = await Transaction.findOne({ transactionId: sessionId });
     if (existingTx) {
       return res.status(200).json({ message: "Already verified", transaction: existingTx });
@@ -76,8 +125,7 @@ exports.verifyPayment = async (req, res) => {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     if (session.payment_status === 'paid') {
-      const { type, artworkId, userId, originalBdtPrice } = session.metadata;
-      
+      const { type, artworkId, userId, originalBdtPrice, targetTier } = session.metadata;
       const finalBdtAmount = originalBdtPrice ? Number(originalBdtPrice) : Math.round((session.amount_total / 100) * BDT_TO_USD_RATE);
 
       existingTx = new Transaction({
@@ -91,13 +139,17 @@ exports.verifyPayment = async (req, res) => {
       });
       await existingTx.save();
 
-      // IMPORTANT CRITICAL FIX: Run status sync update directly to ensure local development triggers apply instantly!
       if (type === 'purchase') {
         await Artwork.findByIdAndUpdate(artworkId, { status: 'sold' });
-        console.log(`✨ Backup Database Verification Layer: Marked Artwork ${artworkId} as SOLD.`);
+        await User.findByIdAndUpdate(userId, { $inc: { purchasesCount: 1 } });
       }
 
-      return res.status(201).json({ message: "Payment verified and saved successfully", transaction: existingTx });
+      if (type === 'subscription') {
+        await User.findByIdAndUpdate(userId, { subscriptionTier: targetTier });
+        console.log(`✨ Subscription Tier Sync Complete: Upgraded User ${userId} to [${targetTier.toUpperCase()}].`);
+      }
+
+      return res.status(201).json({ message: "Payment verified successfully", transaction: existingTx });
     }
 
     res.status(400).json({ message: "Payment was not completed successfully" });
@@ -106,6 +158,7 @@ exports.verifyPayment = async (req, res) => {
   }
 };
 
+// 4. STRIPE WEBHOOK FALLBACK
 exports.handleStripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -113,13 +166,12 @@ exports.handleStripeWebhook = async (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error(`❌ Webhook security validation failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    const { type, artworkId, userId, originalBdtPrice } = session.metadata;
+    const { type, artworkId, userId, originalBdtPrice, targetTier } = session.metadata;
 
     try {
       const finalBdtAmount = originalBdtPrice ? Number(originalBdtPrice) : Math.round((session.amount_total / 100) * BDT_TO_USD_RATE);
@@ -141,10 +193,14 @@ exports.handleStripeWebhook = async (req, res) => {
 
         if (type === 'purchase') {
           await Artwork.findByIdAndUpdate(artworkId, { status: 'sold' });
+          await User.findByIdAndUpdate(userId, { $inc: { purchasesCount: 1 } });
+        }
+
+        if (type === 'subscription') {
+          await User.findByIdAndUpdate(userId, { subscriptionTier: targetTier });
         }
       }
     } catch (dbErr) {
-      console.error('❌ Database sequence storage fault inside webhook trigger:', dbErr);
       return res.status(500).send('Database storage fault');
     }
   }
@@ -155,15 +211,8 @@ exports.handleStripeWebhook = async (req, res) => {
 exports.getMyTransactions = async (req, res) => {
   try {
     const { userId } = req.query;
-    
-    if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "User ID parameter is missing." 
-      });
-    }
+    if (!userId) return res.status(400).json({ success: false, message: "User ID parameter is missing." });
 
-    // Explicitly fetching successful logs, making sure internal object mappings align perfectly
     const transactions = await Transaction.find({ buyerId: userId, status: 'successful' })
       .populate({
         path: 'artworkId',
@@ -171,15 +220,8 @@ exports.getMyTransactions = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
-    return res.status(200).json({ 
-      success: true, 
-      data: transactions 
-    });
+    return res.status(200).json({ success: true, data: transactions });
   } catch (error) {
-    return res.status(500).json({ 
-      success: false, 
-      message: "Failed to fetch user transaction logs", 
-      error: error.message 
-    });
+    return res.status(500).json({ success: false, message: "Failed to fetch user transaction logs", error: error.message });
   }
 };

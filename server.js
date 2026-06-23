@@ -16,6 +16,12 @@ app.use(cors({
 app.use(express.urlencoded({ extended: true }));
 
 // 💳 Mounted payment routes BEFORE express.json() for Stripe signatures
+// This safely captures:
+// - POST /api/payments/create-artwork-checkout
+// - POST /api/payments/create-subscription-checkout ✨ (YOUR NEW ENDPOINT)
+// - POST /api/payments/verify-payment
+// - GET  /api/payments/my-transactions
+// - POST /api/payments/webhook
 app.use('/api/payments', require('./routes/paymentRoutes'));
 
 // Global parsers run for all OTHER routes below
