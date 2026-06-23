@@ -145,6 +145,10 @@ exports.updateArtwork = async (req, res) => {
 // @access  Public (Expects authUser in body payload)
 exports.deleteArtwork = async (req, res) => {
   try {
+
+    console.log("REQ BODY:", req.body);
+console.log("REQ PARAMS:", req.params);
+
     const { authUser } = req.body;
     const artwork = await Artwork.findById(req.params.id);
     if (!artwork) {
@@ -158,6 +162,12 @@ exports.deleteArtwork = async (req, res) => {
     await artwork.deleteOne();
     return res.status(200).json({ success: true, message: "Artwork asset purged successfully." });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+
+  console.error("DELETE ERROR:", error);
+
+  return res.status(500).json({
+    success: false,
+    message: error.message
+  });
   }
 };
