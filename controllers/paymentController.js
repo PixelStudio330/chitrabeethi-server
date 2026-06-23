@@ -7,7 +7,8 @@ const BDT_TO_USD_RATE = 127.3314;
 
 exports.createArtworkCheckout = async (req, res) => {
   try {
-    const { artworkId, userId } = req.body;
+    // ✨ Extract successUrl and cancelUrl dynamically passed from frontend context
+    const { artworkId, userId, successUrl, cancelUrl } = req.body;
 
     const artwork = await Artwork.findById(artworkId);
     const user = await User.findById(userId);
@@ -27,11 +28,16 @@ exports.createArtworkCheckout = async (req, res) => {
 
     const priceInUsdCents = Math.round((artwork.price / BDT_TO_USD_RATE) * 100);
 
+    // Dynamic fallback generation using your new route structure
+    const fallbackBase = process.env.CLIENT_URL || 'http://localhost:3000';
+    const finalSuccessUrl = successUrl || `${fallbackBase}/product-details/${artworkId}?session_id={CHECKOUT_SESSION_ID}`;
+    const finalCancelUrl = cancelUrl || `${fallbackBase}/product-details/${artworkId}`;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
-      success_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/browse/${artworkId}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/browse/${artworkId}`,
+      success_url: finalSuccessUrl, // ✨ Set to dynamically use the passed artwork URL
+      cancel_url: finalCancelUrl,   // ✨ Set to dynamically return to artwork details page
       customer_email: user.email,
       line_items: [
         {
@@ -130,8 +136,9 @@ exports.verifyPayment = async (req, res) => {
         type: type,
         buyerId: userId,
         artworkId: type === 'purchase' ? artworkId : undefined,
+        subscriptionTier: type === 'subscription' ? targetTier : undefined, // ✨ Map model schema completely
         amount: finalBdtAmount,
-        buyerEmail: session.customer_details.email,
+        buyerEmail: session.customer_details?.email || session.customer_email,
         status: 'successful'
       });
       await existingTx.save();
@@ -181,6 +188,7 @@ exports.handleStripeWebhook = async (req, res) => {
           type: type,
           buyerId: userId,
           artworkId: type === 'purchase' ? artworkId : undefined,
+          subscriptionTier: type === 'subscription' ? targetTier : undefined, // ✨ Align with database layout entries
           amount: finalBdtAmount,
           buyerEmail: session.customer_details?.email,
           status: 'successful'
@@ -222,7 +230,6 @@ exports.getMyTransactions = async (req, res) => {
   }
 };
 
-// 🌟 NEW ADMIN METHOD: Get every single transaction on the system
 exports.getAllTransactions = async (req, res) => {
   try {
     const transactions = await Transaction.find({})
@@ -244,7 +251,6 @@ exports.getAllTransactions = async (req, res) => {
   }
 };
 
-// 🌟 NEW ADMIN METHOD: Calculate total system revenue, sold counts, and charts grouping data
 exports.getAdminAnalytics = async (req, res) => {
   try {
     const totalUsers = await User.countDocuments({});

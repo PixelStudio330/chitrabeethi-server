@@ -6,8 +6,8 @@ const {
   verifyPayment, 
   handleStripeWebhook,
   getMyTransactions,
-  getAllTransactions, // 🌟 Added
-  getAdminAnalytics   // 🌟 Added
+  getAllTransactions, 
+  getAdminAnalytics   
 } = require('../controllers/paymentController');
 
 // Standard JSON Endpoints
@@ -16,7 +16,7 @@ router.post('/create-subscription-checkout', express.json(), createSubscriptionC
 router.post('/verify-payment', express.json(), verifyPayment); 
 router.get('/my-transactions', getMyTransactions);
 
-// 🌟 Admin Dash Ledger & Graphs Tracking Endpoints
+// Admin Dash Ledger & Graphs Tracking Endpoints
 router.get('/all-transactions', getAllTransactions);
 router.get('/admin-analytics', getAdminAnalytics);
 
